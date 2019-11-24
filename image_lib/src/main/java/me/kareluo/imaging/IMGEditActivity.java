@@ -5,20 +5,26 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.text.TextUtils;
+import android.util.Log;
 
 import me.kareluo.imaging.core.IMGMode;
 import me.kareluo.imaging.core.IMGText;
 import me.kareluo.imaging.core.file.IMGAssetFileDecoder;
+import me.kareluo.imaging.core.file.IMGContentFileDecoder;
 import me.kareluo.imaging.core.file.IMGDecoder;
 import me.kareluo.imaging.core.file.IMGFileDecoder;
 import me.kareluo.imaging.core.util.IMGUtils;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
 /**
- * Created by felix on 2017/11/14 下午2:26.
+ * Created by felix on 2017/11/14 下午2:26
+ *
+ * getBitmap(): Modified By AoiHosizora
+ * onDoneClick(): Modified By AoiHosizora
  */
 
 public class IMGEditActivity extends IMGEditBaseActivity {
@@ -27,34 +33,32 @@ public class IMGEditActivity extends IMGEditBaseActivity {
 
     private static final int MAX_HEIGHT = 1024;
 
-    public static final String EXTRA_IMAGE_URI = "IMAGE_URI";
-
-    public static final String EXTRA_IMAGE_SAVE_PATH = "IMAGE_SAVE_PATH";
+    public static final String INT_IMAGE_URI = "IMAGE_URI";
+    public static final String INT_IMAGE_SAVE_URI = "IMAGE_SAVE_URI";
 
     @Override
-    public void onCreated() {
-
-    }
+    public void onCreated() { }
 
     @Override
     public Bitmap getBitmap() {
         Intent intent = getIntent();
-        if (intent == null) {
+        Uri uri = intent.getParcelableExtra(INT_IMAGE_URI);
+        if (uri == null || uri.getScheme() == null)
             return null;
-        }
-
-        Uri uri = intent.getParcelableExtra(EXTRA_IMAGE_URI);
-        if (uri == null) {
-            return null;
-        }
 
         IMGDecoder decoder = null;
 
         String path = uri.getPath();
+        Log.i("IMGEditActivity", "getBitmap uri.getScheme(): " + uri.getScheme());
+
         if (!TextUtils.isEmpty(path)) {
             switch (uri.getScheme()) {
                 case "asset":
                     decoder = new IMGAssetFileDecoder(this, uri);
+                    break;
+                case "content":
+                    // content://media/external/images/media/40
+                    decoder = new IMGContentFileDecoder(this, uri);
                     break;
                 case "file":
                     decoder = new IMGFileDecoder(uri);
@@ -62,9 +66,8 @@ public class IMGEditActivity extends IMGEditBaseActivity {
             }
         }
 
-        if (decoder == null) {
+        if (decoder == null)
             return null;
-        }
 
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inSampleSize = 1;
@@ -72,23 +75,13 @@ public class IMGEditActivity extends IMGEditBaseActivity {
 
         decoder.decode(options);
 
-        if (options.outWidth > MAX_WIDTH) {
+        if (options.outWidth > MAX_WIDTH)
             options.inSampleSize = IMGUtils.inSampleSize(Math.round(1f * options.outWidth / MAX_WIDTH));
-        }
-
-        if (options.outHeight > MAX_HEIGHT) {
-            options.inSampleSize = Math.max(options.inSampleSize,
-                    IMGUtils.inSampleSize(Math.round(1f * options.outHeight / MAX_HEIGHT)));
-        }
+        if (options.outHeight > MAX_HEIGHT)
+            options.inSampleSize = Math.max(options.inSampleSize, IMGUtils.inSampleSize(Math.round(1f * options.outHeight / MAX_HEIGHT)));
 
         options.inJustDecodeBounds = false;
-
-        Bitmap bitmap = decoder.decode(options);
-        if (bitmap == null) {
-            return null;
-        }
-
-        return bitmap;
+        return decoder.decode(options);
     }
 
     @Override
@@ -127,26 +120,31 @@ public class IMGEditActivity extends IMGEditBaseActivity {
 
     @Override
     public void onDoneClick() {
-        String path = getIntent().getStringExtra(EXTRA_IMAGE_SAVE_PATH);
+        String path = getIntent().getStringExtra(INT_IMAGE_SAVE_URI);
         if (!TextUtils.isEmpty(path)) {
             Bitmap bitmap = mImgView.saveBitmap();
             if (bitmap != null) {
-                FileOutputStream fout = null;
+                FileOutputStream fos = null;
                 try {
-                    fout = new FileOutputStream(path);
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fout);
+                    fos = new FileOutputStream(path);
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos);
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
                 } finally {
-                    if (fout != null) {
+                    if (fos != null) {
                         try {
-                            fout.close();
+                            fos.close();
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }
                 }
-                setResult(RESULT_OK);
+
+                Intent intent = new Intent();
+                File f = new File(path);
+                if (f.exists())
+                    intent.setData(Uri.fromFile(f));
+                setResult(RESULT_OK, intent);
                 finish();
                 return;
             }
