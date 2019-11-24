@@ -1,0 +1,6 @@
+.project
+.settings/
+.ionide/
+.gradle/
+.vscode/
+.idea/
